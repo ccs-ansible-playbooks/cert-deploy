@@ -1,0 +1,5 @@
+osd_dir: "/.osd"
+osd_scripts_dir: "{{ osd_directory|default(osd_dir) }}/scripts"
+osd_installers_dir: "{{ osd_directory|default(osd_dir) }}/installers"
+osd_applogs_dir: "{{ osd_installers_dir }}/applogs"
+osd_pkg_dir: "{{ osd_directory|default(osd_dir) }}/packages"

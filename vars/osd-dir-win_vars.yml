@@ -1,0 +1,6 @@
+osd_dir: "{{ ansible_facts.env.SystemDrive }}\\OSD"
+osd_scripts_dir: "{{ osd_directory|default(osd_dir) }}\\scripts"
+osd_installers_dir: "{{ osd_directory|default(osd_dir) }}\\installers"
+osd_applogs_dir: "{{ osd_installers_dir }}\\applogs"
+certdeploy_dir: "{{ osd_directory|default(osd_dir) }}\\certdeploy"
+certdeploy_live_dir: "{{ certdeploy_dir }}\\live"

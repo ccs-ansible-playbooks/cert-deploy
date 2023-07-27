@@ -1,0 +1,7 @@
+- name: "restart pf haproxies"
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: "restarted"
+  loop:
+    - "packetfence-haproxy-admin"
+    - "packetfence-haproxy-portal"

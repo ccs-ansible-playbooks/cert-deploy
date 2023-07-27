@@ -1,0 +1,263 @@
+---
+- name: "Setup controller environment"
+  vars_files:
+    - "vars/cert-deploy_vars.yml"
+  vars:
+    host: "localhost"
+
+  hosts: "{{ host }}"
+
+  handlers:
+    - name: "rename existing report file if it exists"
+      ansible.builtin.shell:
+        cmd: "mv {{ certdeploy_report_path }} {{ x_report_new_path }}"
+        removes: "{{ certdeploy_report_path }}"
+      vars:
+        x_report_file_datestr: "{{ '%Y-%m-%dT%H.%M.%S'|strftime(existing_report_file.stat.mtime) }}"
+        x_report_new_path: "{{ certdeploy_report_dir }}/{{ certdeploy_report_file_prefix }}.{{ x_report_file_datestr }}.txt"
+  
+  tasks:
+    - name: "Create cert deploy directories"
+      ansible.builtin.file:
+        mode: 0644
+        path: "{{ item }}"
+        state: "directory"
+      loop:
+        - "{{ certdeploy_logs_dir }}"
+        - "{{ certdeploy_report_dir }}"
+
+    # - name: "Build static vars"
+    #   ansible.builtin.set_fact:
+    #     certdeploy_renewed_domains: "{{ ansible_env.RENEWED_DOMAINS|split(' ') }}"
+    #   vars:
+    #     x_report_datestring: "{{ [ansible_date_time.date, ansible_date_time.time]|join('T') }}"
+
+    - name: "Check for existing report file"
+      ansible.builtin.stat:
+        path: "{{ certdeploy_report_path }}"
+      register: existing_report_file
+      changed_when: false
+      notify: ["rename existing report file if it exists"]
+
+- name: "Deploy certificate to PacketFence"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy_vars.yml"
+    - "vars/cert-deploy-packetfence_vars.yml"
+
+  vars:
+    report_prefix: "[{{ inventory_hostname }}]"
+
+  hosts: "pf"
+
+  handlers:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-packetfence_handlers.yml"
+
+  tasks:
+    - block:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-packetfence_tasks.yml"
+
+        - name: "Record success report entry"
+          delegate_to: "localhost"
+          ansible.builtin.lineinfile:
+            create: true
+            mode: 0644
+            line: "{{ report_prefix }} {{ 'Successfully deployed certificate' if (deploy_cert_task.changed) else 'Certificate already deployed.' }}."
+            path: "{{ certdeploy_report_path }}"
+
+        - ansible.builtin.debug:
+            msg: "report file path: {{ certdeploy_report_path }}"
+      
+      rescue:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-fail_tasks.yml"
+
+- name: "Deploy to reverse proxy"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy_vars.yml"
+    - "vars/cert-deploy-rproxy_vars.yml"
+
+  vars:
+    report_prefix: "[{{ inventory_hostname }}]"
+
+  hosts: "rproxy"
+
+  handlers:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-rproxy_handlers.yml"
+
+  tasks:
+    - block:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-rproxy_tasks.yml"
+
+        - name: "Record success report entry"
+          delegate_to: "localhost"
+          ansible.builtin.lineinfile:
+            create: true
+            mode: 0644
+            line: "{{ report_prefix }} {{ 'Successfully deployed certificate' if (deploy_cert_task.changed) else 'Certificate already deployed.' }}"
+            path: "{{ certdeploy_report_path }}"
+
+        - ansible.builtin.debug:
+            msg: "report file path: {{ certdeploy_report_path }}"
+
+      rescue:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-fail_tasks.yml"
+
+- name: "Deploy to helpdesk"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy_vars.yml"
+    - "vars/cert-deploy-helpdesk_vars.yml"
+
+  vars:
+    report_prefix: "[{{ inventory_hostname }}]"
+
+  hosts: "helpdesk"
+
+  handlers:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-helpdesk_handlers.yml"
+
+  tasks:
+    - block:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-helpdesk_tasks.yml"
+
+        - name: "Record success report entry"
+          delegate_to: "localhost"
+          ansible.builtin.lineinfile:
+            create: true
+            mode: 0644
+            line: "{{ report_prefix }} {{ 'Successfully deployed certificate' if (deploy_cert_task.changed) else 'Certificate already deployed.' }}"
+            path: "{{ certdeploy_report_path }}"
+
+        - ansible.builtin.debug:
+            msg: "report file path: {{ certdeploy_report_path }}"
+
+      rescue:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-fail_tasks.yml"
+
+
+# - name: "Deploy certificate to SMTP Relay"
+#   vars_files:
+#     - "vars/cert-cmsd.bc.ca.yml"
+#     - "vars/cert-deploy_vars.yml"
+#     - "vars/letsencrypt.yml"
+  
+#   vars:
+#     report_prefix: "[{{ inventory_hostname }}]"
+
+#    tags: ["{{ cert_domain }}"]
+
+#   hosts: "internalrelay"
+  
+#   handlers:
+#     - ansible.builtin.import_tasks: "tasks/cert-deploy-smpt-relay_handlers.yml"
+  
+#   tasks:
+#     - block:
+#         - ansible.builtin.import_tasks: "tasks/cert-deploy-smtp-relay_tasks.yml"
+
+#         - name: "Record success report entry"
+#           delegate_to: "localhost"
+#           ansible.builtin.lineinfile:
+#             create: true
+#             mode: 0644
+#             line: "{{ report_prefix }} {{ 'Successfully deployed certificate' if (deploy_cert_task.changed) else 'Certificate already deployed.' }}"
+#             path: "{{ certdeploy_report_path }}"
+    
+#       rescue:
+#         - ansible.builtin.include_tasks: "tasks/cert-deploy-fail_tasks.yml"
+
+- name: "Deploy certificate to Unifi Ctlr"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy_vars.yml"
+    - "vars/cert-deploy-unifi_vars.yml"
+
+  vars:
+    report_prefix: "[{{ inventory_hostname }}]"
+
+  hosts: "unifi-ctlr"
+
+  handlers:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-unifi_handlers.yml"
+
+  tasks:
+    - block:
+        - ansible.builtin.import_tasks: "tasks/cert-deploy-unifi_tasks.yml"
+
+        - name: "Record success report entry"
+          delegate_to: "localhost"
+          ansible.builtin.lineinfile:
+            create: true
+            mode: 0644
+            line: "{{ report_prefix }} {{ 'Successfully deployed certificate' if (deploy_cert_task.changed) else 'Certificate already deployed.' }}"
+            path: "{{ certdeploy_report_path }}"
+
+        - ansible.builtin.debug:
+            msg: "report file path: {{ certdeploy_report_path }}"
+      
+      rescue:
+        - ansible.builtin.include_tasks: "tasks/cert-deploy-fail_tasks.yml"
+
+- name: "Email report if errors are found"
+  vars_files:
+    - "vars/cert-deploy_vars.yml"
+
+  collections:
+    - "community.general"
+
+  hosts: "localhost"
+
+  handlers:
+    - name: "truncate report files"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: "absent"
+      loop: "{{ (all_report_files|json_query('files[].path')|sort)[:(all_report_files.files|length - max_num_reports)] }}"
+
+  tasks:
+    - name: "Check for report file"
+      ansible.builtin.stat:
+        path: "{{ certdeploy_report_path }}"
+      register: report_file
+      changed_when: false
+      failed_when: not report_file.stat.exists
+
+    - name: "Read report file contents"
+      ansible.builtin.set_fact:
+        certdeploy_report_body: "{{ x_report_body }}"
+        certdeploy_success: "{{ false if (x_report_body is search('Failed')) else true }}"
+      vars:
+        x_report_body: "{{ lookup('file', certdeploy_report_path) }}"
+
+    - name: "Email report if there was a failure"
+      community.general.mail:
+        body: "{{ bkp_report_body }}"
+        host: "{{ smtp_server }}"
+        password: "{{ smtp_auth_pass }}"
+        port: 587
+        secure: "starttls"
+        sender: "{{ smtp_from }}"
+        subject: "{{ smtp_subject_line }}"
+        to: "{{ smtp_to }}"
+        username: "{{ smtp_auth_user }}"
+      when: not certdeploy_success
+
+    - name: "archive report file"
+      ansible.builtin.shell:
+        cmd: "mv {{ certdeploy_report_path }} {{ x_report_archive_path }}"
+        removes: "{{ certdeploy_report_path }}"
+      vars:
+        x_report_file_datestr: "{{ [ansible_date_time.date, ansible_date_time.time]|join('T') }}"
+        x_report_archive_path: "{{ certdeploy_report_dir }}/certdeploy_report.{{ x_report_file_datestr }}.txt"
+
+    - name: "Get total list of archived reports"
+      ansible.builtin.find:
+        depth: 1
+        file_type: "file"
+        paths: ["{{ certdeploy_report_dir }}"]
+        patterns: ["{{ certdeploy_report_file_prefix }}*"]
+        use_regex: false
+      register: all_report_files
+      changed_when: all_report_files.files|length > max_num_reports
+      notify: ["truncate report files"]

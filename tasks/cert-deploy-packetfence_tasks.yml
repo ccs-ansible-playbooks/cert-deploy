@@ -1,0 +1,11 @@
+- name: "Copy certificate files"
+  ansible.builtin.copy:
+    mode: 0640
+    src: "{{ item[0] }}"
+    dest: "{{ item[1] }}"
+  loop:
+    - ["{{ fullchainPEM.path }}", "/usr/local/pf/conf/ssl/server.crt"]
+    - ["{{ privkeyPEM.path }}", "/usr/local/pf/conf/ssl/server.key"]
+    - ["{{ fullchain_andkeyPEM.path }}", "/usr/local/pf/conf/ssl/server.pem"]
+  notify: ["restart pf haproxies"]
+  register: deploy_cert_task

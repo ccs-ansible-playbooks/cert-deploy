@@ -1,0 +1,12 @@
+---
+- name: "Prepare for cert deployment"
+  vars:
+    host: "localhost"
+  
+  vars_files:
+    "vars/cert-deploy_vars.yml"
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - name: "Create"

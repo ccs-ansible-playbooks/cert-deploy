@@ -1,0 +1,16 @@
+---
+- name: "Deploy to PacketFence"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy-packetfence_vars.yml"
+
+  vars:
+    host: "pf"
+
+  hosts: "{{ host }}"
+
+  handlers:
+    - ansible.builtin.include_tasks: "tasks/cert-deploy-packetfence_handlers.yml"
+
+  tasks:
+    - ansible.builtin.include_tasks: "tasks/cert-deploy-packetfence_tasks.yml"

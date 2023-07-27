@@ -1,0 +1,9 @@
+- name: "Copy certificate"
+  ansible.builtin.copy:
+    dest: "{{ u_keystore_path }}"
+    group: "unifi"
+    mode: 0640
+    owner: "unifi"
+    src: "{{ unifiKDB.path }}"
+  notify: ["restart unifi"]
+  register: deploy_cert_task

@@ -1,0 +1,6 @@
+- name: "Copy certificate file"
+  ansible.builtin.copy:
+    src: "{{ fullchain_andkeyPEM.path }}"
+    dest: "/etc/ssl/private/{{ fullchain_andkeyPEM.name }}"
+  notify: [ "reload postfix" ]
+  register: deploy_cert_task

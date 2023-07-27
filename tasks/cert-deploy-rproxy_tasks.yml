@@ -1,0 +1,10 @@
+- name: "Copy certificate files"
+  ansible.builtin.copy:
+    mode: 0640
+    src: "{{ item[0] }}"
+    dest: "{{ item[1] }}"
+  loop:
+    - ["{{ fullchainPEM.path }}", "/etc/ssl/private/fullchain.pem"]
+    - ["{{ privkeyPEM.path }}", "/etc/ssl/private/privkey.pem"]
+  notify: ["reload nginx"]
+  register: deploy_cert_task

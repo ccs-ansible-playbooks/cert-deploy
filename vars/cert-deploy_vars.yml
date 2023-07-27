@@ -1,0 +1,18 @@
+certdeploy_logs_dir: "/opt/certdeploy/logs"
+certdeploy_report_dir: "/opt/certdeploy/reports"
+certdeploy_report_file_prefix: "certdeploy_report"
+certdeploy_report_path: "{{ certdeploy_report_dir }}/{{ certdeploy_report_file_prefix }}.running.txt"
+
+## primary domain of cert is below, the other domains unifi, pf, helpdesk ... are subject alternative names
+cert_domain: "wan.centennialchristian.ca"
+
+max_num_reports: 52
+max_num_logs: 52
+
+smtp_auth_user: "NetworkNotification@CentennialChristian.ca"
+smtp_auth_pass: "HDcS2DvVQ7p3Nfv2cZ"
+smtp_from: "{{ smtp_auth_user }}"
+smtp_server: "smtp.office365.com"
+smtp_subject: "Network Device Backup Report"
+smtp_to: "Notifications-Group@CentennialChristian.ca"
+# smtp_to: "erolleman@nisgaa.bc.ca"

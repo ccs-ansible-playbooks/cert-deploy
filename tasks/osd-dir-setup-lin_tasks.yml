@@ -1,0 +1,12 @@
+- ansible.builtin.include_vars:
+    file: "vars/osd-dir-lin_vars.yml"
+
+- name: "Create OSD directories"
+  ansible.builtin.file:
+    mode: 0750
+    path: "{{ item }}"
+    state: "directory"
+  loop:
+    - "{{ osd_scripts_dir }}"
+    - "{{ osd_applogs_dir }}"
+    - "{{ osd_pkg_dir }}"

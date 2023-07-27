@@ -1,0 +1,44 @@
+- name: "Import OSD variables"
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/vars/osd-dir-win_vars.yml"
+
+- name: "Create OSD sub directories"
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: "directory"
+  loop:
+    - "{{ osd_scripts_dir }}"
+    - "{{ osd_applogs_dir }}"
+
+- name: "Grant permissions to the OSD folder"
+  ansible.windows.win_acl:
+    path: "{{ osd_directory|default(osd_dir) }}"
+    rights: "FullControl"
+    inherit: "ContainerInherit,ObjectInherit"
+    propagation: "{{ item[1] }}"
+    state: "present"
+    type: "allow"
+    user: "{{ item[0] }}"
+  with_nested:
+    - ["BUILTIN\\Administrators", "NT AUTHORITY\\SYSTEM", "{{ ansible_env.USERDOMAIN }}\\{{ ansible_facts.user_id }}"]
+    - ['None', 'InheritOnly']
+
+- name: "Grant domain admin permissions to the OSD folder"
+  ansible.windows.win_acl:
+    path: "{{ osd_directory|default(osd_dir) }}"
+    rights: "FullControl"
+    inherit: "ContainerInherit,ObjectInherit"
+    propagation: "{{ item }}"
+    state: "present"
+    type: "allow"
+    user: "{{ ansible_env.USERDOMAIN }}\\Domain Admins"
+  loop:
+    - 'None'
+    - 'InheritOnly'
+  when: ansible_windows_domain_member
+
+- name: "Remove inheritence on the OSD folder"
+  ansible.windows.win_acl_inheritance:
+    path: "{{ osd_directory|default(osd_dir) }}"
+    reorganize: "no"
+    state: "absent"

@@ -1,0 +1,16 @@
+---
+- name: "Deploy letsencrypt cert to Unifi Ctlr"
+  vars_files:
+    - "vars/letsencrypt.yml"
+    - "vars/cert-deploy-unifi_vars.yml"
+
+  vars:
+    host: "unifi-ctlr"
+
+  hosts: "{{ host }}"
+
+  handlers:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-unifi_handlers.yml"
+
+  tasks:
+    - ansible.builtin.import_tasks: "tasks/cert-deploy-unifi_tasks.yml"
