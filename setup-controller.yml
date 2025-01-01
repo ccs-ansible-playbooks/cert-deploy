@@ -5,7 +5,7 @@
   vars:
     ansible_connection: "local"
     task_user: "ansible"
-    smtp_server: "internalrelay.nisgaa.bc.ca"
+    smtp_server: "internalrelay.centennialchristian.ca"
     smtp_sender: "letsencrypt-alert@nisgaa.bc.ca"
     smtp_recipient: "it-dept@nisgaa.bc.ca"
     sudo_group: "{{ 'wheel' if (ansible_os_family is search('([Rr]ed|[Cc]ent|[Ss]ang|[Xx]cp)')) else 'sudo' }}"
@@ -115,9 +115,9 @@
     - name: "Create live directory"
       ansible.builtin.file:
         group: "certdeploy"
-        mode: "0760"
+        mode: "0770"
         owner: "root"
-        path: "{{ cert_dir }}"
+        path: "{{ cert_dir }}/live"
         state: "directory"
 
     - name: "Create archive directory"
@@ -128,27 +128,57 @@
         path: "{{ archive_dir }}"
         state: "directory"
 
-    - name: "Grant access on live directory to sudo users via ACLs"
+    - name: "Grant access certs directory to sudo users via ACLs"
       ansible.posix.acl:
         default: false
         entity: "{{ sudo_group }}"
         etype: "group"
         path: "{{ cert_dir }}"
-        permissions: "rwx"
+        permissions: "rw"
         recursive: true
         state: "present"
 
-    - name: "Grant default permissions on live directory to sudo users via ACLs"
+    - name: "Grant traverse access to certs dir and sub for sudo users via ACLs"
+      ansible.builtin.shell:
+        cmd: |
+          /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:{{ sudo_group }}:rwx" {} \;
+
+    - name: "Grant traverse access to certs dir and sub for certdeploy group via ACLs"
+      ansible.builtin.shell:
+        cmd: |
+          /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:certdeploy:rwx" {} \;
+
+    - name: "Grant access certs directory to certdeploy group via ACLs"
+      ansible.posix.acl:
+        default: false
+        entity: "certdeploy"
+        etype: "group"
+        path: "{{ cert_dir }}"
+        permissions: "rw"
+        recursive: true
+        state: "present"
+
+    - name: "Grant default permissions cert directory to sudo users via ACLs"
       ansible.posix.acl:
         default: true
         entity: "{{ sudo_group }}"
         etype: "group"
         path: "{{ cert_dir }}"
-        permissions: "rwx"
+        permissions: "rwX"
+        recursive: true
+        state: "present"
+
+    - name: "Grant default permissions certs directory to certdeploy group via ACLs"
+      ansible.posix.acl:
+        default: true
+        entity: "certdeploy"
+        etype: "group"
+        path: "{{ cert_dir }}"
+        permissions: "rwX"
         recursive: true
         state: "present"
 
     - name: "Install required collections"
       ansible.builtin.script:
         cmd: |
-          ansible-galaxy collection install -r "{{ playbook_dir }}/requirements.yml"
+          ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"
