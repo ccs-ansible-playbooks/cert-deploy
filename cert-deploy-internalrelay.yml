@@ -1,0 +1,34 @@
+---
+- name: "Deploy to SMTP Relay"
+  vars_files:
+    - "vars/cert_locations.yml"
+
+  vars:
+    host: "internalrelay"
+    cert_domain: "wan.centennialchristian.ca"
+    cert_source: "letsencrypt"
+
+  hosts: "{{ host }}"
+
+  become: true
+
+  handlers:
+    - name: "reload postfix service"
+      ansible.builtin.service:
+        name: "postfix"
+        state: "reloaded"
+
+  tasks:
+    - name: "Copy certificates"
+      ansible.builtin.copy:
+        dest: "/etc/ssl/private/{{ item | basename }}"
+        group: "certificate"
+        mode: 0640
+        src: "{{ item }}"
+        owner: "root"
+      loop:
+      - "{{ fullchainPEM }}"
+      - "{{ certPEM }}"
+      - "{{ privkeyPEM }}"
+      notify:
+        - "reload postfix service"

@@ -1,0 +1,52 @@
+- name: "create osd and certdeploy variables"
+  ansible.builtin.set_fact:
+    certdeploy_dir: "{{ ansible_facts.env.ProgramData }}\\certdeploy"
+    certdeploy_live_dir: "{{ certdeploy_dir }}\\live\\{{ cert_domain }}"
+    certdeploy_archive_dir: "{{ certdeploy_dir }}\\archive\\{{ cert_domain }}"
+
+- name: "Import certdeploy variables"
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/vars/certdeploy-win_vars.yml"
+
+- name: "Create certdeploy live directory"
+  ansible.windows.win_file:
+    path: "{{ certdeploy_live_dir }}"
+    state: "directory"
+
+- name: "Create certdeploy archive directory"
+  ansible.windows.win_file:
+    path: "{{ certdeploy_archive_dir }}"
+    state: "directory"
+
+- name: "Grant permissions to the OSD folder"
+  with_nested:
+    - ["BUILTIN\\Administrators", "NT AUTHORITY\\SYSTEM", "{{ ansible_env.USERDOMAIN }}\\{{ ansible_facts.user_id }}"]
+    - ['None', 'InheritOnly']
+  ansible.windows.win_acl:
+    path: "{{ certdeploy_dir }}"
+    rights: "FullControl"
+    inherit: "ContainerInherit,ObjectInherit"
+    propagation: "{{ item[1] }}"
+    state: "present"
+    type: "allow"
+    user: "{{ item[0] }}"
+
+- name: "Grant domain admin permissions to the OSD folder"
+  loop:
+    - 'None'
+    - 'InheritOnly'
+  when: ansible_windows_domain_member
+  ansible.windows.win_acl:
+    path: "{{ certdeploy_dir }}"
+    rights: "FullControl"
+    inherit: "ContainerInherit,ObjectInherit"
+    propagation: "{{ item }}"
+    state: "present"
+    type: "allow"
+    user: "{{ ansible_domain }}\\Domain Admins"
+
+- name: "Remove inheritence on the OSD folder"
+  ansible.windows.win_acl_inheritance:
+    path: "{{ certdeploy_dir }}"
+    reorganize: "no"
+    state: "absent"

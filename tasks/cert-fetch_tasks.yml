@@ -1,0 +1,66 @@
+- name: "Install python cryptography"
+  ansible.builtin.package:
+    name:
+      - "python3-cryptography"
+    state: "present"
+
+- name: "Create loop vars"
+  ansible.builtin.set_fact:
+    cert_domain: "{{ cert_values.cert_domain }}"
+    cert_remote_dir: "{{ cert_values.cert_remote_dir }}"
+    cert_source: "{{ cert_values.cert_source }}"
+
+- name: "Get certificate info from cert at {{ inventory_hostname }}"
+  community.crypto.x509_certificate_info:
+    path: "{{ cert_remote }}"
+  register: remote_cert_info
+  changed_when: false
+
+- name: "Get remote certificate file list"
+  ansible.builtin.find:
+    contains: ".pem"
+    depth: 1
+    follow: true
+    file_type: "any"
+    path: "{{ cert_remote_dir }}"
+  register: remote_cert_files
+
+- name: "Local tasks"
+  become: false
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+  block:
+    - name: "Try determine local certificate info"
+      block:
+        - name: "Get local certificate info"
+          changed_when: false
+          register: local_cert_info
+          community.crypto.x509_certificate_info:
+            path: "{{ certPEM }}"
+
+      rescue:
+        - name: "Local certificate file doesn't exist, set end date to 1970-01-01"
+          ansible.builtin.set_fact:
+            local_cert_info:
+              not_after: "19701010000000Z"
+
+        - ansible.builtin.meta: "clear_host_errors"
+
+    - name: "Check if local certificate is newer"
+      changed_when: is_cert_newer
+      notify:
+        - "fetch new certificate files"
+      ansible.builtin.set_fact:
+        cert_archive_enddate_str: "{{ (local_cert_info.not_after | to_datetime('%Y%m%d%H%M%S%z')).strftime('%Y-%m-%d') }}"
+        is_cert_newer: "{{ true if local_cert_info.not_after | to_datetime('%Y%m%d%H%M%S%z') < remote_cert_info.not_after | to_datetime('%Y%m%d%H%M%S%z') else false }}"
+
+    - name: "Check if local certificates need to be archived"
+      changed_when: true
+      notify:
+        - "archive existing certificate files"
+      when: local_cert_info.issuer is defined and is_cert_newer
+      ansible.builtin.debug:
+        msg: "Archiving of existing files is needed."
+
+- ansible.builtin.meta: "flush_handlers"

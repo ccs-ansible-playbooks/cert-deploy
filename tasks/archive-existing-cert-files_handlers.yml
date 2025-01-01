@@ -1,0 +1,15 @@
+- become: false
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+  block:
+    - name: "Create Archive Directory"
+      ansible.builtin.file:
+        path: "{{ cert_archive_dir }}"
+        state: "directory"
+
+    - name: "Move Existing Certificate Files to Archive Directory"
+      ansible.builtin.shell:
+        cmd: |
+          mv -f -u -t "{{ cert_archive_dir }}" "{{ cert_live_dir }}"/*
+

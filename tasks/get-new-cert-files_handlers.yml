@@ -1,0 +1,116 @@
+- name: "Download new certificates"
+  ansible.builtin.fetch:
+    dest: "{{ cert_live_dir }}/"
+    flat: true
+    src: "{{ item.path }}"
+  loop: "{{ remote_cert_files.files }}"
+
+- ansible.builtin.set_fact:
+    new_certs: "{{ new_certs + [ cert_domain ] }}"
+
+- delegate_to: "localhost"
+  become: false
+  vars:
+    ansible_connection: local
+  block:
+    - name: "Separate client cert and chain files from fullchain.pem"
+      split_letsencrypt_fullchain:
+        src: "{{ fullchainPEM }}"
+        dest_dir: "{{ cert_live_dir }}"
+
+    # - name: "Download Root CA file"
+    #   register: ca_certs
+    #   download_letsencrypt_root_ca:
+    #     src: "{{ chainPEM }}"
+    #     dest_dir: "{{ cert_live_dir }}"
+
+    - name: "Create fullchain_andkey.pem file"
+      ansible.builtin.copy:
+        content: |
+          {{ lookup('file', fullchainPEM) }}
+          {{ lookup('file', privkeyPEM) }}
+        dest: "{{ fullchain_andkeyPEM }}"
+        mode: "0660"
+
+    # - name: "Create chain file with rootca"
+    #   ansible.builtin.copy:
+    #     content: |
+    #       {% for cert_path in (ca_certs['items'] | map(attribute='path') | reverse) %}
+    #       {{ lookup('file', cert_path) }}
+    #       {% if not loop.last %}\n{% endif %}
+    #       {% endfor %}
+    #       {{ lookup('file', chainPEM) }}
+    #     dest: "{{ chain_and_caPEM }}"
+    #     mode: "0660"
+
+    # - name: "Create fullchain with Root CA file"
+    #   ansible.builtin.copy:
+    #     content: |
+    #       {{ lookup('file', rootcaPEM) }}
+    #       {{ lookup('file', fullchainPEM) }}
+    #     dest: "{{ fullchain_and_caPEM }}"
+    #     mode: "0660"
+
+    - name: "Create PFX certificate file"
+      environment:
+        PASS_PHRASE: "{{ PFX_PASSPHRASE }}"
+      ansible.builtin.shell:
+        cmd: |
+          openssl pkcs12 -export -passout "env:PASS_PHRASE" -out "{{ certPFX }}" -in "{{ certPEM }}" -inkey "{{ privkeyPEM }}"
+        creates: "{{ certPFX }}"
+
+    - name: "Set PFX certificate file permissions"
+      ansible.builtin.file:
+        mode: "0660"
+        path: "{{ certPFX }}"
+
+    # - name: "Create PFX certificate file contain fullchain and Root CA"
+    #   environment:
+    #     PASS_PHRASE: "{{ PFX_PASSPHRASE }}"
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       openssl pkcs12 -export -passout "env:PASS_PHRASE" -out "{{ fullchain_and_caPFX }}" -in "{{ fullchainPEM }}" -inkey "{{ privkeyPEM }}"
+    #     creates: "{{ fullchain_and_caPFX }}"
+    #
+    # - name: "Set the fullchain and Root CA PKCS file permissions"
+    #   ansible.builtin.file:
+    #     mode: "0660"
+    #     path: "{{ fullchain_and_caPFX }}"
+
+    - name: "Create PFX in legacy pkcs12 format certificate file"
+      environment:
+        PASS_PHRASE: "{{ PFX_PASSPHRASE }}"
+      ansible.builtin.shell:
+        cmd: |
+          openssl pkcs12 -export -legacy -passout "env:PASS_PHRASE" -out "{{ certPFX_legacy }}" -in "{{ certPEM }}" -inkey "{{ privkeyPEM }}"
+        creates: "{{ certPFX_legacy }}"
+
+    - name: "Set the certificate in legacy PKCS12 file permissions"
+      ansible.builtin.file:
+        mode: "0660"
+        path: "{{ certPFX_legacy }}"
+
+    # - name: "Create PFX certificate file contain fullchain and Root CA in legacy pkcs12 format"
+    #   environment:
+    #     PASS_PHRASE: "{{ PFX_PASSPHRASE }}"
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       openssl pkcs12 -export -legacy -passout "env:PASS_PHRASE" -out "{{ fullchain_and_caPFX_legacy }}" -in "{{ fullchainPEM }}" -inkey "{{ privkeyPEM }}"
+    #     creates: "{{ fullchain_and_caPFX_legacy }}"
+    #
+    # - name: "Set the fullchain and Root CA legacy PKCS12 file permissions"
+    #   ansible.builtin.file:
+    #     mode: "0660"
+    #     path: "{{ fullchain_and_caPFX_legacy }}"
+
+    # - name: "Create JKS certificate store file from PKCS12 file"
+    #   environment:
+    #     PASS_PHRASE: "{{ PFX_PASSPHRASE }}"
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       keytool -importkeystore -srckeystore "{{ fullchain_and_caPFX }}" -srcstoretype pkcs12 -srcstorepass "$PASS_PHRASE" -destkeystore "{{ fullchain_and_caKDB }}" -deststoretype jks -deststorepass "$PASS_PHRASE" -noprompt
+
+    # - name: "Set the JKS certificate store file permissions"
+    #   ansible.builtin.file:
+    #     mode: "0660"
+    #     path: "{{ fullchain_and_caKDB }}"

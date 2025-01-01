@@ -1,0 +1,31 @@
+cert_dir: "/opt/certificates"
+archive_dir: "{{ cert_dir }}/archive"
+
+cert_live_dir: "{{ cert_dir }}/live/{{ cert_source }}/{{ cert_domain }}"
+cert_archive_dir: "{{ cert_dir }}/archive/{{ cert_source }}/{{ cert_domain }}/{{ cert_archive_enddate_str }}"
+
+certPEM: "{{ cert_live_dir }}/cert.pem"
+
+certPFX: "{{ cert_live_dir }}/cert.pfx"
+
+certPFX_legacy: "{{ cert_live_dir }}/cert_legacy.pfx"
+
+chainPEM: "{{ cert_live_dir }}/chain.pem"
+
+chain_and_caPEM: "{{ cert_live_dir }}/chain_and_ca.pem"
+
+fullchainPEM: "{{ cert_live_dir }}/fullchain.pem"
+
+fullchain_and_caPEM: "{{ cert_live_dir }}/fullchain_and_ca.pem"
+
+fullchain_and_caPFX: "{{ cert_live_dir }}/fullchain_and_ca.pfx"
+
+fullchain_and_caPFX_legacy: "{{ cert_live_dir }}/fullchain_and_ca_legacy.pfx"
+
+fullchain_and_caKDB: "{{ cert_live_dir }}/fullchain_and_ca.kdb"
+
+privkeyPEM: "{{ cert_live_dir }}/privkey.pem"
+
+fullchain_andkeyPEM: "{{ cert_live_dir }}/fullchain_andkey.pem"
+
+rootcaPEM: "{{ cert_live_dir }}/rootca.pem"

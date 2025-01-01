@@ -1,16 +1,74 @@
 ---
-- name: "Deploy to PacketFence"
+- name: "Deploy wildcard certificate to PacketFence"
   vars_files:
-    - "vars/letsencrypt.yml"
-    - "vars/cert-deploy-packetfence_vars.yml"
+    - "vars/cert_locations.yml"
 
   vars:
     host: "pf"
+    # this is the subject name of the cert, the cert has the packetfence
+    # name in the subject alternative name
+    cert_domain: "wan.centennialchristian.ca"
+    cert_source: "letsencrypt"
 
   hosts: "{{ host }}"
 
+  become: true
+
   handlers:
-    - ansible.builtin.include_tasks: "tasks/cert-deploy-packetfence_handlers.yml"
+    - name: "restart pf haproxy services"
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: "restarted"
+      loop:
+        - "packetfence-haproxy-admin"
+        - "packetfence-haproxy-portal"
+
+    - name: "restart pf radius"
+      ansible.builtin.service:
+        name: "packetfence-radiusd-auth"
+        state: "restarted"
 
   tasks:
-    - ansible.builtin.include_tasks: "tasks/cert-deploy-packetfence_tasks.yml"
+    - name: "Copy fullchain file to packetfence server(s) for HTTPS"
+      notify:
+        - "restart pf haproxy services"
+      ansible.builtin.copy:
+        src: "{{ fullchainPEM }}"
+        dest: "/usr/local/pf/conf/ssl/server.crt"
+        owner: "pf"
+        group: "pf"
+        mode: "0664"
+
+    - name: "Copy private key file to packetfence server(s) for HTTPS"
+      notify:
+        - "restart pf haproxy services"
+      ansible.builtin.copy:
+        src: "{{ privkeyPEM }}"
+        dest: "/usr/local/pf/conf/ssl/server.key"
+        owner: "pf"
+        group: "pf"
+        mode: "0664"
+
+    - name: "Copy fullchain with key file to packetfence server(s) for HTTPS"
+      notify:
+        - "restart pf haproxy services"
+      ansible.builtin.copy:
+        src: "{{ fullchain_andkeyPEM }}"
+        dest: "/usr/local/pf/conf/ssl/server.pem"
+        owner: "pf"
+        group: "pf"
+        mode: "0664"
+
+    # !! Using a certificate from internal CA now
+    # - name: "Copy certificate files to packetfence server(s) for RADIUS"
+    #   ansible.builtin.copy:
+    #     src: "{{ item[0] }}"
+    #     dest: "{{ item[1] }}"
+    #     owner: "pf"
+    #     group: "pf"
+    #     mode: 0664
+    #   loop:
+    #     - ["{{ fullchainPEM.path }}", "/usr/local/pf/raddb/certs/server.crt"]
+    #     - ["{{ privkeyPEM.path }}", "/usr/local/pf/raddb/certs/server.key"]
+    #     - ["{{ caPEM.path }}", "/usr/local/pf/raddb/certs/ca.pem"]
+    #   notify: ["restart pf radius"]
