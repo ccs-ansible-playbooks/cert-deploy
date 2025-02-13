@@ -1,5 +1,7 @@
 - name: "Install python cryptography"
   ansible.builtin.package:
+    environment:
+      DEBIAN_FRONTEND: "noninteractive"
     name:
       - "python3-cryptography"
     state: "present"

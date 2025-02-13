@@ -1,20 +1,21 @@
 #!/bin/bash
 
-export FROM_ADDRESS="letsencrypt-alert@centennialchristian.ca"
+export FROM_ADDRESS="NetworkNotifications@centennialchristian.ca"
 export FROM_NAME="LetsEncrypt Cert Alert"
 
-MSMTP_ACCOUNT="internalrelay"
+MSMTP_ACCOUNT="networknotifications"
 PLAYBOOK_DEPLOY_NAME="cert-deploy-all.yml"
 PLAYBOOK_FETCH_NAME="cert-fetch.yml"
 SECRETS_FILE="secrets/secrets.yml"
-#TO_ADDRESS="Notifications@centennialchristian.ca"
-TO_ADDRESS="erolleman@outlook.com"
+TO_ADDRESS="Notifications@centennialchristian.ca"
+# TO_ADDRESS="erolleman@outlook.com"
 
 script_dir=$(dirname "$0")
 template_failed_email="${script_dir}/failed-email.template.html"
 
 cleanup() {
-    test -f "${playbook_results}" && rm -f "${playbook_results}"
+    test -f "${playbook_results}" && \
+        rm -f "${playbook_results}"
 }
 
 trap "cleanup; exit" 1 2 3 6 14 15
@@ -28,7 +29,7 @@ while IFS=$'\n' read -r row; do
 done <<<"$(ip -brief address | awk '$1!~"^lo" {print "<td>",$1,"</td>","<td>",$3,"</td>"}')"
 export script_full_path=$(realpath $0)
 
-secrets_path="${script_full_path}/${SECRETS_FILE}"
+secrets_path="${script_dir}/${SECRETS_FILE}"
 
 if [ ! -f "${secrets_path}" ]; then
     failed_msg=$(cat<<EOF
@@ -65,7 +66,6 @@ EOF
     exit 11
 fi
 
-echo "Ending early"; exit;
 echo "Running playbook"
 
 playbook_results=$(ansible-playbook -e "smtp_from_name=${FROM_NAME}" -e "smtp_from_address=${FROM_ADDRESS}" -e "smtp_to=${TO_ADDRESS}" -u ansibleadmin -b "${script_dir}/${PLAYBOOK_FETCH_NAME}" "${script_dir}/${PLAYBOOK_DEPLOY_NAME}" 2>&1)
@@ -82,11 +82,4 @@ if [ $exit_code != 0 ]; then
         msmtp --account="${MSMTP_ACCOUNT}" it-dept@sd87.bc.ca
     exit $exit_code
 
-    del computer_name
-    del ip_address_table
-    del playbook_results_for_email
-    del script_full_path
 fi
-
-
-

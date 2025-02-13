@@ -5,86 +5,128 @@
   vars:
     ansible_connection: "local"
     task_user: "ansible"
-    smtp_server: "internalrelay.centennialchristian.ca"
-    smtp_sender: "letsencrypt-alert@nisgaa.bc.ca"
-    smtp_recipient: "it-dept@nisgaa.bc.ca"
-    sudo_group: "{{ 'wheel' if (ansible_os_family is search('([Rr]ed|[Cc]ent|[Ss]ang|[Xx]cp)')) else 'sudo' }}"
+    # smtp_server: "internalrelay.centennialchristian.ca"
+    smtp_server: "smtp.office365.com"
+    smtp_sender: "NetworkNotifications@centennialchristian.ca"
+    smtp_recipient: "Notifications@centennialchristian.ca"
+    sudo_group: "{{ 'wheel' if (ansible_os_family is search('([Rr]ed|[Cc]ent|[Xx]cp)')) else 'sudo' }}"
 
   hosts: "localhost"
 
   gather_facts: true
 
+  handlers:
+    - name: "rebuild password db"
+      changed_when: "( ['none'] + rebuild_pass_db.stdout_lines) | last != pass_db_file.stat.checksum"
+      register: "rebuild_pass_db"
+      ansible.builtin.shell:
+        cmd: |
+          postmap -c "/etc/postfix" sasl_password && sha1sum sasl_password.db | awk '{print $1}'
+
   tasks:
-    # - name: "Install Email client for alerting"
-    #   ansible.builtin.package:
-    #     name:
-    #       - "msmtp"
-    #       - "python3-cryptography"
-    #
+    - name: "Install Email client for alerting"
+      environment:
+        DEBIAN_FRONTEND: "noninteractive"
+      ansible.builtin.package:
+        name:
+          # - "msmtp"
+          - "postfix"
+          - "python3-cryptography"
+
     # - name: "Configure Email client"
     #   when: task_user is defined
-    #   ansible.builtin.copy:
-    #     dest: "/etc/msmtprc"
-    #     mode: "0644"
-    #     group: "root"
-    #     owner: "root"
-    #     content: |
-    #       account       internalrelay
-    #       auth          off
+    #   ansible.builtin.blockinfile:
+    #     block: |
+    #       account       networknotifications
+    #       auth          on
     #       from          {{ smtp_sender }}
     #       host          {{ smtp_server }}
-    #       port          25
-    #       tls           off
+    #       port          587
+    #       tls           on
     #       timeout       5
-    #
-    # - name: "Create SystemD Service file"
-    #   ansible.builtin.copy:
-    #     content: |
-    #       [Unit]
-    #       Description=Fetch new certificate(s) then deploy
-    #       After=network.target
-    #
-    #       [Service]
-    #       Type=oneshot
-    #       ExecStartPre=+/usr/bin/mkdir -p "{{ cert_dir }}"
-    #       ExecStartPre+/usr/bin/chown -R {{ task_user | default("root") }} "{{ cert_dir }}"
-    #       ExecStartPre=+/usr/bin/setfacl -R -d -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
-    #       ExecStartPre=+/usr/bin/setfacl -R -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
-    #       ExecStart={{ playbook_dir }}/cert-deploy-run.bash
-    #       User={{ task_user | default("root") }}
-    #
-    #       [Install]
-    #       WantedBy=multi-user.target
-    #     dest: "/etc/systemd/system/cert-deploy.service"
+    #       user          NoReply@CentennialChristian.ca
+    #       password      Wato456#
+    #       logfile       ~/.local/msmtp/msmtp.log
+    #     create: true
+    #     group: "certdeploy"
+    #     mode: "0640"
     #     owner: "root"
-    #     group: "root"
-    #     mode: "0755"
-    #
-    # - name: "Create SystemD Timer file"
-    #   ansible.builtin.copy:
-    #     content: |
-    #       [Unit]
-    #       Description=Fetch new certificate(s) then deploy
-    #
-    #       [Timer]
-    #       OnCalendar=*-*-* 04:30:00
-    #
-    #       [Install]
-    #       WantedBy=timers.target
-    #     dest: "/etc/systemd/system/cert-deploy.timer"
-    #     owner: "root"
-    #     group: "root"
-    #     mode: "0755"
-    #
-    # - name: "SystemD Reload"
-    #   ansible.builtin.systemd:
-    #     daemon_reload: true
-    #
-    # - name: "SystemD Enable Timer"
-    #   ansible.builtin.systemd:
-    #     enabled: true
-    #     name: "cert-deploy.timer"
-    #     state: "started"
+    #     path: "/etc/msmtprc"
+
+    - name: "Deploy postfix main configuration"
+      ansible.builtin.template:
+        dest: "/etc/postfix/main.cf"
+        group: "root"
+        mode: "0644"
+        owner: "root"
+        src: "main.cf.j2"
+
+    - name: "Checksum of current host password .db"
+      changed_when: false
+      register: "pass_db_file"
+      ansible.builtin.stat:
+        checksum_algorithm: "sha1"
+        get_checksum: true
+        path: "/etc/postfix/sasl_password"
+
+    - name: "Deploy postfix relay host password file"
+      notify:
+        - "rebuild password db"
+      ansible.builtin.template:
+        dest: "/etc/postfix/sasl_password"
+        group: "root"
+        mode: "0600"
+        owner: "root"
+        src: "sasl_password.j2"
+
+    - name: "Create SystemD Service file"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Fetch new certificate(s) then deploy
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStartPre=+/usr/bin/mkdir -p "{{ cert_dir }}"
+          ExecStartPre+/usr/bin/chown -R {{ task_user | default("root") }} "{{ cert_dir }}"
+          ExecStartPre=+/usr/bin/setfacl -R -d -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
+          ExecStartPre=+/usr/bin/setfacl -R -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
+          ExecStart={{ playbook_dir }}/cert-deploy-run.bash
+          User={{ task_user | default("root") }}
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: "/etc/systemd/system/cert-deploy.service"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    - name: "Create SystemD Timer file"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Fetch new certificate(s) then deploy
+
+          [Timer]
+          OnCalendar=*-*-* 04:30:00
+
+          [Install]
+          WantedBy=timers.target
+        dest: "/etc/systemd/system/cert-deploy.timer"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    - name: "SystemD Reload"
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: "SystemD Enable Timer"
+      ansible.builtin.systemd:
+        enabled: true
+        name: "cert-deploy.timer"
+        state: "started"
 
     - name: "Create ansible group"
       ansible.builtin.group:
@@ -105,7 +147,24 @@
         name: "ansible"
         shell: "/bin/bash"
 
+    - name: "Get ansible user home dir"
+      changed_when: false
+      register: get_ansible_home
+      ansible.builtin.shell:
+        cmd: |
+          getent passwd ansible | awk -F : '{ print $6 }'
+
+    - name: "Create msmtp dir for logs"
+      ansible.builtin.file:
+        group: "ansible"
+        mode: "0770"
+        owner: "ansible"
+        path: "{{ get_ansible_home.stdout }}/.local/msmtp"
+        state: "directory"
+
     - name: "Install python3 cryptography"
+      environment:
+        DEBIAN_FRONTEND: "noninteractive"
       ansible.builtin.package:
         name:
           - "acl"
@@ -134,19 +193,19 @@
         entity: "{{ sudo_group }}"
         etype: "group"
         path: "{{ cert_dir }}"
-        permissions: "rw"
+        permissions: "rwX"
         recursive: true
         state: "present"
 
-    - name: "Grant traverse access to certs dir and sub for sudo users via ACLs"
-      ansible.builtin.shell:
-        cmd: |
-          /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:{{ sudo_group }}:rwx" {} \;
-
-    - name: "Grant traverse access to certs dir and sub for certdeploy group via ACLs"
-      ansible.builtin.shell:
-        cmd: |
-          /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:certdeploy:rwx" {} \;
+    # - name: "Grant traverse access to certs dir and sub for sudo users via ACLs"
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:{{ sudo_group }}:rwx" {} \;
+    #
+    # - name: "Grant traverse access to certs dir and sub for certdeploy group via ACLs"
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:certdeploy:rwx" {} \;
 
     - name: "Grant access certs directory to certdeploy group via ACLs"
       ansible.posix.acl:
@@ -154,7 +213,7 @@
         entity: "certdeploy"
         etype: "group"
         path: "{{ cert_dir }}"
-        permissions: "rw"
+        permissions: "rwX"
         recursive: true
         state: "present"
 
@@ -178,7 +237,7 @@
         recursive: true
         state: "present"
 
-    - name: "Install required collections"
-      ansible.builtin.script:
-        cmd: |
-          ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"
+    # - name: "Install required collections"
+    #   ansible.builtin.script:
+    #     cmd: |
+    #       ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"
