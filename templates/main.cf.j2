@@ -135,7 +135,7 @@ mail_owner = postfix
 inet_interfaces = localhost
 
 # Enable IPv4, and IPv6 if supported
-inet_protocols = all
+inet_protocols = ipv4
 
 # The proxy_interfaces parameter specifies the network interface
 # addresses that this mail system receives mail on by way of a
@@ -734,12 +734,11 @@ smtp_tls_CAfile = /etc/pki/tls/certs/ca-bundle.crt
 # Use TLS if this is supported by the remote SMTP server, otherwise use
 # plaintext (opportunistic TLS outbound).
 #
-smtp_tls_security_level = may
 meta_directory = /etc/postfix
 shlib_directory = /usr/lib64/postfix
 
-smtp_use_tls = yes
 smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_password
 smtp_sasl_security_options = noanonymous
-smtp_sasl_tls_security_options = noanonymous
-smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_tls_security_level = encrypt
+smtp_use_tls = yes

@@ -23,12 +23,12 @@
       ansible.builtin.copy:
         dest: "/etc/ssl/private/{{ item | basename }}"
         group: "certificate"
-        mode: 0640
+        mode: "0640"
         src: "{{ item }}"
         owner: "root"
       loop:
-      - "{{ fullchainPEM }}"
-      - "{{ certPEM }}"
-      - "{{ privkeyPEM }}"
+        - "{{ fullchainPEM }}"
+        - "{{ certPEM }}"
+        - "{{ privkeyPEM }}"
       notify:
         - "reload postfix service"

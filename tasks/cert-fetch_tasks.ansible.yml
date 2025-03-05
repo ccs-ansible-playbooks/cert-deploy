@@ -1,11 +1,3 @@
-- name: "Install python cryptography"
-  ansible.builtin.package:
-    environment:
-      DEBIAN_FRONTEND: "noninteractive"
-    name:
-      - "python3-cryptography"
-    state: "present"
-
 - name: "Create loop vars"
   ansible.builtin.set_fact:
     cert_domain: "{{ cert_values.cert_domain }}"

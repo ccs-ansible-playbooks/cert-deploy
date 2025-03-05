@@ -1,0 +1,7 @@
+var_naming_pattern: "^[a-zA-Z_][A-Za-z0-9_]*$"
+
+skip_list:
+  - "name[casing]"
+  - "name[missing]"
+  - no-changed-when
+  - yaml[line-length]

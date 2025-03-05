@@ -5,11 +5,12 @@
   vars:
     ansible_connection: "local"
     task_user: "ansible"
-    # smtp_server: "internalrelay.centennialchristian.ca"
     smtp_server: "smtp.office365.com"
     smtp_sender: "NetworkNotifications@centennialchristian.ca"
     smtp_recipient: "Notifications@centennialchristian.ca"
     sudo_group: "{{ 'wheel' if (ansible_os_family is search('([Rr]ed|[Cc]ent|[Xx]cp)')) else 'sudo' }}"
+
+  become: true
 
   hosts: "localhost"
 
@@ -17,41 +18,78 @@
 
   handlers:
     - name: "rebuild password db"
-      changed_when: "( ['none'] + rebuild_pass_db.stdout_lines) | last != pass_db_file.stat.checksum"
+      changed_when: "(['none'] + rebuild_pass_db.stdout_lines) | last != pass_db_file.stat.checksum"
       register: "rebuild_pass_db"
       ansible.builtin.shell:
         cmd: |
-          postmap -c "/etc/postfix" sasl_password && sha1sum sasl_password.db | awk '{print $1}'
+          set -o pipefail
+          postmap -c "/etc/postfix" /etc/postfix/sasl_password && sha1sum sasl_password.db | awk '{print $1}'
 
   tasks:
-    - name: "Install Email client for alerting"
+    - when: ansible_os_family == "Debian"
+      block:
+        - name: "Install Microsoft repo for Debian"
+          environment:
+            DEBIAN_FRONTEND: "noninteractive"
+          ansible.builtin.apt:
+            name:
+              - "https://packages.microsoft.com/config/debian/{{ ansible_distribution_major_version }}/packages-microsoft-prod.deb"
+
+        - name: Import Microsoft GPG key for Debian systems
+          ansible.builtin.apt_key:
+            url: "https://packages.microsoft.com/keys/microsoft.asc"
+            state: present
+
+        - name: Update package cache for Debian systems
+          ansible.builtin.apt:
+            update_cache: true
+
+    - when: ansible_os_family == "RedHat"
+      block:
+        - name: "Install Extra Packages repo"
+          ansible.builtin.dnf:
+            name:
+              - "epel-release"
+            state: "present"
+
+        - name: "Add Microsoft repository repo source for Enterprise Linux"
+          ansible.builtin.get_url:
+            dest: "/etc/yum.repos.d/microsoft.repo"
+            group: "root"
+            mode: "0644"
+            owner: "root"
+            url: "https://packages.microsoft.com/config/rhel/{{ ansible_distribution_major_version }}/prod.repo"
+
+        - name: "Import Microsoft GPG key for RHEL-based systems"
+          ansible.builtin.rpm_key:
+            key: "https://packages.microsoft.com/keys/microsoft.asc"
+            state: present
+
+        - name: "Update package info for RHEL-based systems"
+          ansible.builtin.dnf:
+            update_cache: true
+
+    - name: "Install require packages"
       environment:
         DEBIAN_FRONTEND: "noninteractive"
       ansible.builtin.package:
         name:
-          # - "msmtp"
+          - "acl"
+          - "cyrus-sasl"
+          - "cyrus-sasl-plain"
+          - "jq"
           - "postfix"
+          - "powershell"
           - "python3-cryptography"
+          - "python3-jinja2"
+          - "python3-pip"
+          - "s-nail"
+          - "util-linux"
 
-    # - name: "Configure Email client"
-    #   when: task_user is defined
-    #   ansible.builtin.blockinfile:
-    #     block: |
-    #       account       networknotifications
-    #       auth          on
-    #       from          {{ smtp_sender }}
-    #       host          {{ smtp_server }}
-    #       port          587
-    #       tls           on
-    #       timeout       5
-    #       user          NoReply@CentennialChristian.ca
-    #       password      Wato456#
-    #       logfile       ~/.local/msmtp/msmtp.log
-    #     create: true
-    #     group: "certdeploy"
-    #     mode: "0640"
-    #     owner: "root"
-    #     path: "/etc/msmtprc"
+    - name: "Install jinja2 cli"
+      ansible.builtin.pip:
+        name:
+          - "jinja2-cli"
 
     - name: "Deploy postfix main configuration"
       ansible.builtin.template:
@@ -90,9 +128,11 @@
           Type=oneshot
           ExecStartPre=+/usr/bin/mkdir -p "{{ cert_dir }}"
           ExecStartPre+/usr/bin/chown -R {{ task_user | default("root") }} "{{ cert_dir }}"
-          ExecStartPre=+/usr/bin/setfacl -R -d -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
-          ExecStartPre=+/usr/bin/setfacl -R -m "u:{{ task_user | default("root") }}:rwx" "{{ cert_dir }}"
-          ExecStart={{ playbook_dir }}/cert-deploy-run.bash
+          ExecStartPre=+/usr/bin/setfacl -R -d -m "u:{{ task_user | default("root") }}:rwX" "{{ cert_dir }}"
+          ExecStartPre=+/usr/bin/setfacl -R -m "u:{{ task_user | default("root") }}:rwX" "{{ cert_dir }}"
+          ExecStartPre=+/usr/bin/setfacl -R -d -m "u:{{ task_user | default("root") }}:rX" "{{ playbook_dir }}"
+          ExecStartPre=+/usr/bin/setfacl -R -m "u:{{ task_user | default("root") }}:rX" "{{ playbook_dir }}"
+          ExecStart={{ playbook_dir }}/cert-deploy-run.pwsh -PlaybookDir "{{ playbook_dir }}"
           User={{ task_user | default("root") }}
 
           [Install]
@@ -152,24 +192,8 @@
       register: get_ansible_home
       ansible.builtin.shell:
         cmd: |
+          set -o pipefail
           getent passwd ansible | awk -F : '{ print $6 }'
-
-    - name: "Create msmtp dir for logs"
-      ansible.builtin.file:
-        group: "ansible"
-        mode: "0770"
-        owner: "ansible"
-        path: "{{ get_ansible_home.stdout }}/.local/msmtp"
-        state: "directory"
-
-    - name: "Install python3 cryptography"
-      environment:
-        DEBIAN_FRONTEND: "noninteractive"
-      ansible.builtin.package:
-        name:
-          - "acl"
-          - "python3-cryptography"
-        state: "present"
 
     - name: "Create live directory"
       ansible.builtin.file:
@@ -198,16 +222,16 @@
         state: "present"
 
     # - name: "Grant traverse access to certs dir and sub for sudo users via ACLs"
-    #   ansible.builtin.shell:
+    #   ansible.builtin.command:
     #     cmd: |
     #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:{{ sudo_group }}:rwx" {} \;
     #
     # - name: "Grant traverse access to certs dir and sub for certdeploy group via ACLs"
-    #   ansible.builtin.shell:
+    #   ansible.builtin.command:
     #     cmd: |
     #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:certdeploy:rwx" {} \;
 
-    - name: "Grant access certs directory to certdeploy group via ACLs"
+    - name: "Grant to access certs directory to certdeploy group via ACLs"
       ansible.posix.acl:
         default: false
         entity: "certdeploy"
@@ -237,7 +261,8 @@
         recursive: true
         state: "present"
 
-    # - name: "Install required collections"
-    #   ansible.builtin.script:
-    #     cmd: |
-    #       ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"
+    - name: "Install required collections"
+      become: false
+      ansible.builtin.shell:
+        cmd: |
+          ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"

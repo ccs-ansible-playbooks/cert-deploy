@@ -5,6 +5,7 @@
   block:
     - name: "Create Archive Directory"
       ansible.builtin.file:
+        mode: "0770"
         path: "{{ cert_archive_dir }}"
         state: "directory"
 
@@ -12,4 +13,3 @@
       ansible.builtin.shell:
         cmd: |
           mv -f -u -t "{{ cert_archive_dir }}" "{{ cert_live_dir }}"/*
-

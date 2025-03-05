@@ -10,25 +10,27 @@
     host: "rproxy"
     cert_data:
       - cert_domain: "wan.centennialchristian.ca"
-        cert_remote_dir: "/opt/nginx-proxy-manager/data/custom_ssl/npm-1"
+        cert_remote_dir: "/opt/nginx-proxy-manager/letsencrypt/live/npm-4"
         cert_source: "letsencrypt"
     cert_remote: "{{ cert_remote_dir }}/fullchain.pem"
     new_certs: []
+    notify_file_path: "{{ playbook_dir }}/fetched_new_cert"
 
   hosts: "{{ host }}"
 
   handlers:
     - name: "archive existing certificate files"
       ansible.builtin.include_tasks:
-        file: "tasks/archive-existing-cert-files_handlers.yml"
+        file: "tasks/archive-existing-cert-files_handlers.ansible.yml"
 
     - name: "fetch new certificate files"
       ansible.builtin.include_tasks:
-        file: "tasks/get-new-cert-files_handlers.yml"
+        file: "tasks/get-new-cert-files_handlers.ansible.yml"
 
   tasks:
-    - loop: "{{ cert_data }}"
+    - name: "Run fetch tasks for each certificate"
+      loop: "{{ cert_data }}"
       loop_control:
         loop_var: cert_values
       ansible.builtin.include_tasks:
-        file: "tasks/cert-fetch_tasks.yml"
+        file: "tasks/cert-fetch_tasks.ansible.yml"
