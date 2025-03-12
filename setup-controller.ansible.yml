@@ -1,4 +1,13 @@
 - name: "Setup Cert Deployment Scheduled Task on ansible controller"
+  vars_prompt:
+    - name: "smarthost_user_name"
+      prompt: "User for M365 SmartHost email"
+
+    - name: "smarthost_user_pass"
+      prompt: "Password for SmartHost user email"
+      private: true
+      confirm: true
+
   vars_files:
     - "vars/cert_locations.yml"
 
