@@ -1,1 +1,8 @@
-templates/sasl_password*
+templates/sasl_password
+templates/sasl_password.j2
+templates/sasl_password.jinja
+secrets/secrets.ansible.yaml
+secrets/secrets.json
+secrets/secrets.ini
+secrets/secrets.yaml
+secrets/secrets.yml

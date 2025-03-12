@@ -25,6 +25,35 @@
           set -o pipefail
           postmap -c "/etc/postfix" /etc/postfix/sasl_password && sha1sum sasl_password.db | awk '{print $1}'
 
+  pre_tasks:
+    - name: "Get secrets file details"
+      register: secrets_file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/secrets/secrets.yml"
+
+    - name: "Make sure secrets file exists"
+      ansible.builtin.assert:
+        that:
+          - "secrets_file.stat.exists"
+        fail_msg: |
+          The file '{{ playbook_dir }}/secrets/secrets.yml' does not exist.
+          Please create the file.
+          Use '{{ playbook_dir }}/secrets/secrets.yml.example' as a guide.
+
+    - name: "Get sasl_password file details"
+      register: sasl_password_file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/templates/sasl_password"
+
+    - name: "Make sure sasl_password file exists"
+      ansible.builtin.assert:
+        that:
+          - "sasl_password_file.stat.exists"
+        fail_msg: |
+          The file '{{ playbook_dir }}/templates/sasl_password' does not exist.
+          Please create the file.
+          Use '{{ playbook_dir }}/templates/sasl_password.example' as a guide.
+
   tasks:
     - when: ansible_os_family == "Debian"
       block:
