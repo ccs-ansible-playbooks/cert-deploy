@@ -32,8 +32,7 @@
           environment:
             DEBIAN_FRONTEND: "noninteractive"
           ansible.builtin.apt:
-            name:
-              - "https://packages.microsoft.com/config/debian/{{ ansible_distribution_major_version }}/packages-microsoft-prod.deb"
+            deb: "https://packages.microsoft.com/config/debian/{{ ansible_distribution_major_version }}/packages-microsoft-prod.deb"
 
         - name: Import Microsoft GPG key for Debian systems
           ansible.builtin.apt_key:
@@ -69,7 +68,7 @@
           ansible.builtin.dnf:
             update_cache: true
 
-    - name: "Install require packages"
+    - name: "Install required packages"
       environment:
         DEBIAN_FRONTEND: "noninteractive"
       ansible.builtin.package:
@@ -89,7 +88,7 @@
     - name: "Install jinja2 cli"
       ansible.builtin.pip:
         name:
-          - "jinja2-cli"
+          - "jinja-cli"
 
     - name: "Deploy postfix main configuration"
       ansible.builtin.template:
@@ -221,16 +220,6 @@
         recursive: true
         state: "present"
 
-    # - name: "Grant traverse access to certs dir and sub for sudo users via ACLs"
-    #   ansible.builtin.command:
-    #     cmd: |
-    #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:{{ sudo_group }}:rwx" {} \;
-    #
-    # - name: "Grant traverse access to certs dir and sub for certdeploy group via ACLs"
-    #   ansible.builtin.command:
-    #     cmd: |
-    #       /usr/bin/find "{{ cert_dir }}" -type d -exec setfacl -m "g:certdeploy:rwx" {} \;
-
     - name: "Grant to access certs directory to certdeploy group via ACLs"
       ansible.posix.acl:
         default: false
@@ -261,8 +250,9 @@
         recursive: true
         state: "present"
 
-    - name: "Install required collections"
-      become: false
+    - name: "Install required collections in ansible user context"
+      become: true
+      become_user: "ansible"
       ansible.builtin.shell:
         cmd: |
           ansible-galaxy install -r "{{ playbook_dir }}/requirements.yml"

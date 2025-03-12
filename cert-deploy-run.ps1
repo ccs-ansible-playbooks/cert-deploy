@@ -12,14 +12,15 @@ $PLAYBOOK_FETCH_NAME = "cert-fetch.ansible.yml";
 $SECRETS_PATH = Join-Path -Path $RunDir -ChildPath "secrets/secrets.yml";
 $TO_ADDRESS = "Notifications@centennialchristian.ca";
 
+
 $prevDir = $PWD.Path;
 cd $RunDir;
 try {
     try {
-        ./Test-SecretsFile -Path $SECRETS_PATH | Out-Null;
+        ./bin/Test-SecretsFile.ps1 -Path $SECRETS_PATH | Out-Null;
     } catch {
         # [Console]::Error.WriteLine($_.Exception.Message);
-        ./Send-EmailFailure `
+        ./bin/Send-EmailFailure.ps1 `
             -Details $_.Exception.Message `
             -FromAddress $FROM_ADDRESS `
             -FromName $FROM_NAME `
@@ -33,7 +34,7 @@ try {
     $fetchExitCode = $LASTEXITCODE;
 
     if ($fetchExitCode -ne 0) {
-        ./Send-EmailFailure `
+        ./bin/Send-EmailFailure.ps1 `
             -Details $fetchResults `
             -FromAddress $FROM_ADDRESS `
             -FromName $FROM_NAME `
@@ -54,7 +55,7 @@ try {
         $deployExitCode = $LASTEXITCODE;
 
         if ($deployExitCode -ne 0) {
-            ./Send-EmailFailure `
+            ./bin/Send-EmailFailure.ps1 `
                 -Details $deployResults `
                 -FromAddress $FROM_ADDRESS `
                 -FromName $FROM_NAME `
@@ -64,8 +65,7 @@ try {
             Remove-Variable -Name deployResults,deployExitCode;
             throw "${deployExitCode}";
         } else {
-            "";
-            $deployResults;
+            "`n${deployResults}";
         }
         Remove-Variable -Name deployExitCode,deployResults,fetchResults;
     } else {
